@@ -2,6 +2,9 @@
 pragma solidity ^0.8.20;
 
 interface IPPFXStargateHook{
+    event SetTrustedRemote(uint16 _remoteChainId, bytes _path);
+    event SetTrustedRemoteAddress(uint16 _remoteChainId, bytes _remoteAddress);
+    
     function getHash(
         bytes4 selector, // deposit / withdraw / claim withdraw
         address user,
