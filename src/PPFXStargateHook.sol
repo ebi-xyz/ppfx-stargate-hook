@@ -15,11 +15,17 @@ contract PPFXStargateHook is IPPFXStargateHook, Context, ReentrancyGuard {
     uint256 private constant VALID_DATA_OFFSET = 20;
     uint256 private constant SIGNATURE_OFFSET = 180;
 
-    address public verifier;
+    address public authorized;
     IPPFX public ppfx;
 
-    constructor(IPPFX _ppfx) {
+    modifier onlyAuthorized() {
+        require(_msgSender() == authorized, "Not authorized");
+        _;
+    }
+
+    constructor(IPPFX _ppfx, address _authorized) {
         ppfx = _ppfx;
+        authorized = _authorized;
     }
 
     function getHash(
@@ -34,7 +40,7 @@ contract PPFXStargateHook is IPPFXStargateHook, Context, ReentrancyGuard {
         );
     }
 
-    function validate(bytes calldata data) external view returns (bool){
+    function validate(bytes calldata data) public view returns (bool){
          (
             bytes4 selector,
             address user,
