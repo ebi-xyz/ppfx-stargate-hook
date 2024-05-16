@@ -12,13 +12,14 @@ import {SendParam} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oft/interfaces/
 import {MessagingFee} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oft/OFTCore.sol";
 import {OptionsBuilder} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/OptionsBuilder.sol";
 
-contract PPFXStargateHook is Ownable, ReentrancyGuard {
+contract PPFXStargateWithdrawHook is Ownable, ReentrancyGuard {
     using ECDSA for bytes32;
     using MessageHashUtils for bytes32;
     using OptionsBuilder for bytes;
 
     uint256 private constant VALID_DATA_OFFSET = 20;
     uint256 private constant SIGNATURE_OFFSET = 180;
+    uint256 private constant SIG_VALID_FOR_SEC = 120;
 
     bytes4 public constant WITHDRAW_SELECTOR = bytes4(keccak256("withdrawForUser(bytes)"));
     bytes4 public constant CLAIM_SELECTOR = bytes4(keccak256("claimWithdrawalForUser(bytes)"));
@@ -90,11 +91,10 @@ contract PPFXStargateHook is Ownable, ReentrancyGuard {
         uint256 amount,
         uint256 nonce,
         bytes4 methodID,
-        uint48 validAt,
-        uint48 validUntil
+        uint48 signedAt
     ) public view returns (bytes32) {
         return keccak256(
-            abi.encode(user, nonce, block.chainid, methodID, amount, validAt, validUntil)
+            abi.encode(user, nonce, block.chainid, methodID, amount, signedAt)
         );
     }
 
@@ -105,8 +105,7 @@ contract PPFXStargateHook is Ownable, ReentrancyGuard {
             uint256 amount,
             uint256 nonce,
             bytes4 methodID,
-            uint48 validAt,
-            uint48 validUntil,
+            uint48 signedAt,
             bytes calldata signature
         ) = parseData(data);
         // solhint-disable-next-line reason-string
@@ -115,10 +114,10 @@ contract PPFXStargateHook is Ownable, ReentrancyGuard {
             "PPFXStargateHook: invalid signature length in data"
         );
 
-        bytes32 hash = MessageHashUtils.toEthSignedMessageHash(getHash(user, amount, nonce, methodID, validAt, validUntil));
+        bytes32 hash = MessageHashUtils.toEthSignedMessageHash(getHash(user, amount, nonce, methodID, signedAt));
         bool valid = nonce == userNonce[user] &&
-            validAt >= block.timestamp &&
-            validUntil <= block.timestamp && 
+            signedAt >= block.timestamp &&
+            block.timestamp <= signedAt + SIG_VALID_FOR_SEC && 
             (methodID == WITHDRAW_SELECTOR || methodID == CLAIM_SELECTOR) && 
             user == ECDSA.recover(hash, signature);
 
@@ -133,14 +132,13 @@ contract PPFXStargateHook is Ownable, ReentrancyGuard {
             uint256 amount,
             uint256 nonce,
             bytes4 methodID,
-            uint48 validAt,
-            uint48 validUntil,
+            uint48 signedAt,
             bytes calldata signature
         )
     {
-        (user, amount, nonce, methodID, validAt, validUntil) = abi.decode(
+        (user, amount, nonce, methodID, signedAt) = abi.decode(
             data[VALID_DATA_OFFSET:SIGNATURE_OFFSET],
-            (address, uint256, uint256, bytes4, uint48, uint48)
+            (address, uint256, uint256, bytes4, uint48)
         );
         signature = data[SIGNATURE_OFFSET:];
     }
