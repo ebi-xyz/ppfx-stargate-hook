@@ -6,8 +6,6 @@ import {IStargate} from "./IStargate.sol";
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {SendParam} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oft/interfaces/IOFT.sol";
 import {MessagingFee} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oft/OFTCore.sol";
 import {OptionsBuilder} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/OptionsBuilder.sol";
@@ -15,8 +13,6 @@ import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
-    using ECDSA for bytes32;
-    using MessageHashUtils for bytes32;
     using OptionsBuilder for bytes;
     using EnumerableSet for EnumerableSet.AddressSet;
     using SafeERC20 for IERC20;
