@@ -1,27 +1,30 @@
 // SPDX-License-Identifier: MIT 
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
 import {IOAppComposer} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/interfaces/IOAppComposer.sol";
+import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IPPFX} from "./IPPFX.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import { OFTComposeMsgCodec } from "@layerzerolabs/lz-evm-oapp-v2/contracts/oft/libs/OFTComposeMsgCodec.sol";
 
 
-contract PPFXStargateDepositHook is IOAppComposer, Ownable, ReentrancyGuard {
-    IPPFX public ppfx;
-    address public immutable endpoint;
+contract PPFXStargateDepositHook is IOAppComposer, ReentrancyGuard {
+    using SafeERC20 for IERC20;
+
+    IPPFX public immutable ppfx;
+    address public immutable lzEndpoint;
     address public immutable stargate;
 
     /// @notice Constructs the PPFXStargateDepositHook contract.
     /// @dev Initializes the contract.
     /// @param _ppfx The address of the PPFX Contract
-    /// @param _endpoint LayerZero Endpoint address
+    /// @param _lzEndpoint LayerZero Endpoint address
     /// @param _stargate The address of the Stargate contract
-    constructor(address _ppfx, address _endpoint, address _stargate) {
+    constructor(address _ppfx, address _lzEndpoint, address _stargate) {
         ppfx = IPPFX(_ppfx);
-        endpoint = _endpoint;
+        lzEndpoint = _lzEndpoint;
         stargate = _stargate;
     }
 
@@ -40,18 +43,16 @@ contract PPFXStargateDepositHook is IOAppComposer, Ownable, ReentrancyGuard {
         address /*Executor*/,
         bytes calldata /*Executor Data*/
     ) external payable override {
-        require(_oApp == stargate, "!Stargate");
-        require(msg.sender == endpoint, "!endpoint");
+        require(msg.sender == lzEndpoint, "PPFXStargateDepositHook: Not LayerZero Endpoint");
+        require(_oApp == stargate, "PPFXStargateDepositHook: Not Stargate Contract");
 
         // Extract the composed message from the delivered message using the MsgCodec
         bytes memory _composeMsgContent = OFTComposeMsgCodec.composeMsg(_message);
         // Decode the composed message, in this case, the uint256 amount and address receiver for the deposit
         (uint256 _amountToDeposit, address _receiver) = abi.decode(_composeMsgContent, (uint256, address));
+        // Increase usdt allowance to PPFX before depositing
+        IERC20(ppfx.usdt()).safeIncreaseAllowance(address(ppfx), _amountToDeposit);
 
         ppfx.depositForUser(_receiver, _amountToDeposit);
-    }
-
-    function updatePPFX(address _newPPFX) external onlyOwner {
-        ppfx = IPPFX(_newPPFX);
     }
 }
