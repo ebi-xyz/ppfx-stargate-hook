@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {IPPFX} from "./IPPFX.sol";
 import {IStargate} from "./IStargate.sol";
-import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {SendParam} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oft/interfaces/IOFT.sol";
@@ -15,7 +15,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
     using OptionsBuilder for bytes;
     using EnumerableSet for EnumerableSet.AddressSet;
-    using SafeERC20 for IERC20;
+    using SafeERC20 for ERC20;
 
     event NewOperator(address indexed newOperatorAddress);
     event OperatorRemoved(address indexed operatorAddr);
@@ -32,6 +32,8 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
     address public admin;
     address private pendingAdmin;
     EnumerableSet.AddressSet private operators;
+
+    mapping(uint256 => uint256) public dstChainUsdtDecimal;
 
     /**
      * @dev Throws if called by any account other than the Admin
@@ -53,12 +55,13 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
         IPPFX _ppfx,
         address _admin,
         address _treasury,
-        address _stargate
+        address _stargate // 0x1502FA4be69d526124D453619276FacCab275d3D
     ) {
         ppfx = _ppfx;
         stargate = IStargate(_stargate);
         _updateAdmin(_admin);
         _updateTreasury(_treasury);
+        ERC20(ppfx.usdt()).approve(address(stargate), type(uint256).max);
     }
     
     /****************************
@@ -86,20 +89,25 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
      * 
      * Can only be called by operator
      */
-    function claimWithdrawalForUser(address fromUser, bytes calldata data, uint32 dstEndpointID, uint256 fee) external onlyOperator {
+    function claimWithdrawalForUser(address fromUser, bytes calldata data, uint32 dstEndpointID, uint256 dstUsdtDecimal, uint256 fee) external payable onlyOperator {
         // Query .usdt() everytime to prevent inconsistent usdt if PPFX update USDT address
-        IERC20 usdt = IERC20(ppfx.usdt());
+        ERC20 usdt = ERC20(ppfx.usdt());
         uint256 beforeClaimBal = usdt.balanceOf(address(this));
         ppfx.claimPendingWithdrawalForUser(address(this), fromUser, data);
         uint256 afterClaimBal = usdt.balanceOf(address(this));
 
         // Calculate claimed amount & deduct fee & send fee to treasury
         uint256 claimed = afterClaimBal - beforeClaimBal;
-        // Not allow claimed == fee, that means bridging 0 usdt.
-        require(claimed > fee, "PPFXStargateWithdrawHook: Insufficient claimed balance to cover the fee");
-        usdt.safeTransfer(treasury, fee);
-
+        
+        if (fee > 0) {
+            // Not allow claimed == fee, that means bridging 0 usdt.
+            require(claimed > fee, "PPFXStargateWithdrawHook: Insufficient claimed balance to cover the fee");
+            usdt.safeTransfer(treasury, fee);
+        }
+        
         uint256 sendAmount = claimed - fee;
+        uint256 convertedSendAmount = sendAmount * (1 ** dstUsdtDecimal / 1 ** usdt.decimals());
+        require(convertedSendAmount > 0, "PPFXStargateWithdrawHook: Converted amount is lower or equals to 0");
 
         // TODO: Send gas limit as function args / see if there is a way to estimate it
         bytes memory options = OptionsBuilder
@@ -117,8 +125,15 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
         );
         
         MessagingFee memory stargateFee = stargate.quoteSend(sendParam, false);
+        require(msg.value >= stargateFee.nativeFee, "PPFXStargateWithdrawHook: Insufficient msg.value to bridge token");
+
         // This contract address is the refund address
         stargate.sendToken{value: stargateFee.nativeFee}(sendParam, stargateFee, address(this));
+        uint256 remaining = msg.value - stargateFee.nativeFee;
+        if (remaining > 0) {
+            bool success = payable(msg.sender).send(remaining);
+            require(success, "PPFXStargateWithdrawHook: Failed to refund fee");
+        }
     }
 
     /************************
