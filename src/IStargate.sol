@@ -3,25 +3,22 @@ pragma solidity ^0.8.0;
 
 import { IOFT, SendParam, MessagingFee, MessagingReceipt, OFTReceipt } from "@layerzerolabs/lz-evm-oapp-v2/contracts/oft/interfaces/IOFT.sol";
 
+/// @notice Stargate implementation type.
 enum StargateType {
     Pool,
     OFT
 }
 
+/// @notice Ticket data for bus ride.
 struct Ticket {
-    uint56 ticketId;
-    bytes passenger;
+    uint72 ticketId;
+    bytes passengerBytes;
 }
 
-struct RideBusOptions {
-    uint128 extraFare;
-    uint128 nativeDropAmount;
-    uint128 lzComposeGas;
-    uint128 lzComposeValue;
-}
-
+/// @title Interface for Stargate.
+/// @notice Defines an API for sending tokens to destination chains.
 interface IStargate is IOFT {
-    /// @dev This function is same as `send` in OFT interface but returns the passenger data if in the bus ride mode,
+    /// @dev This function is same as `send` in OFT interface but returns the ticket data if in the bus ride mode,
     /// which allows the caller to ride and drive the bus in the same transaction.
     function sendToken(
         SendParam calldata _sendParam,
@@ -29,12 +26,6 @@ interface IStargate is IOFT {
         address _refundAddress
     ) external payable returns (MessagingReceipt memory msgReceipt, OFTReceipt memory oftReceipt, Ticket memory ticket);
 
-    /// @dev Quote the extra bus fare and return the ride bus options details.
-    function quoteRideBusOptions(
-        uint32 _dstEid,
-        bytes calldata _options,
-        uint256 _composeMsgSize
-    ) external view returns (RideBusOptions memory rideBusOptions);
-
+    /// @notice Returns the Stargate implementation type.
     function stargateType() external pure returns (StargateType);
 }

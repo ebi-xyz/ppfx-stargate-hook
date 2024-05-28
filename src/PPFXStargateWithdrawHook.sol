@@ -2,11 +2,11 @@
 pragma solidity ^0.8.20;
 
 import {IPPFX} from "./IPPFX.sol";
-import {IStargate} from "./IStargate.sol";
+import {IStargate, Ticket} from "./IStargate.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import {SendParam} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oft/interfaces/IOFT.sol";
+import {SendParam, MessagingReceipt, OFTReceipt} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oft/interfaces/IOFT.sol";
 import {MessagingFee} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oft/OFTCore.sol";
 import {OptionsBuilder} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/OptionsBuilder.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
@@ -89,7 +89,9 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
      * 
      * Can only be called by operator
      */
-    function claimWithdrawalForUser(address fromUser, bytes calldata data, uint32 dstEndpointID, uint256 dstUsdtDecimal, uint256 fee) external payable onlyOperator {
+    function claimWithdrawalForUser(address fromUser, bytes calldata data, uint32 dstEndpointID, uint256 slippage, uint256 fee) external payable onlyOperator {
+        require(slippage > 0, "PPFXStargateWithdrawHook: Slippage can not be zero");
+        
         // Query .usdt() everytime to prevent inconsistent usdt if PPFX update USDT address
         ERC20 usdt = ERC20(ppfx.usdt());
         uint256 beforeClaimBal = usdt.balanceOf(address(this));
@@ -98,28 +100,23 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
 
         // Calculate claimed amount & deduct fee & send fee to treasury
         uint256 claimed = afterClaimBal - beforeClaimBal;
-        
+        require(claimed > 0, "PPFXStargateWithdrawHook: No USDT to bridge");
+
         if (fee > 0) {
             // Not allow claimed == fee, that means bridging 0 usdt.
             require(claimed > fee, "PPFXStargateWithdrawHook: Insufficient claimed balance to cover the fee");
             usdt.safeTransfer(treasury, fee);
         }
-        
-        uint256 sendAmount = claimed - fee;
-        uint256 convertedSendAmount = sendAmount * (1 ** dstUsdtDecimal / 1 ** usdt.decimals());
-        require(convertedSendAmount > 0, "PPFXStargateWithdrawHook: Converted amount is lower or equals to 0");
 
-        // TODO: Send gas limit as function args / see if there is a way to estimate it
-        bytes memory options = OptionsBuilder
-            .newOptions()
-            .addExecutorLzReceiveOption(200000, 0);
-
+        // Expecting slippage to be at least 6, 6bps
+        uint256 minSendAmount = sendAmount * (10000 - slippage) / 10000;
+    
         SendParam memory sendParam = SendParam(
             dstEndpointID,
-            bytes32(uint256(uint160(fromUser))), // Recipient address
+            bytes32(bytes20(fromUser)), // Recipient address
             sendAmount, // Send amount
             sendAmount, // Minimum send amount
-            options,
+            "",
             "",
             ""
         );
