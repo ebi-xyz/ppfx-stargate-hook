@@ -34,7 +34,30 @@ The DepositHook receives message from StargateV2 after USDT tokens are sent cros
 - The hook calls PPFX contract to depost tokens on behalf of user
 
 ```
-TODO: stargate calling example w/ SendParams
+    // coonstruct message
+    const composeMsg = abiCoder.encode(["uint256", "address"], [receiveAmount, fromAddress])
+    const sendParam = {
+        dstEid, // lz endpoint Id
+        to, // Recipient address
+        amountLD,// Send amount
+        minAmountLD, // amountLD less slippage+fee
+        extraOptions,
+        composeMsg,
+        oftCmd: new Uint8Array(), // Can leave empty
+    }
+
+    // quote gas and fees
+    const [nativeFee, lzTokenFee] = await stargateUSDTPoolContract.quoteSend(sendParam, false)
+    const messagingFee = {
+        nativeFee,
+        lzTokenFee
+    }
+    
+    const bridgeResult = await stargateUSDTPoolContract.sendToken(sendParam, messagingFee, fromAddress, {
+        value: nativeFee
+    });
+    console.log("https://layerzeroscan.com/tx/" + bridgeResult.hash)
+
 ```
 
 ## WithdrawHook
@@ -45,7 +68,43 @@ The WithdrawHook claims USDT tokens from PPFX on behalf of users, and then sends
 - Optionally, a withdraw fee may be charged (which may be needed to cover gas)
 
 ```
-TODO: stargate calling example
+        const methodID = ppfxContract.WITHDRAW_SELECTOR();
+
+        const data = abiCoder.encode(
+            // (user, delegate, amount, nonce, methodID, signedAt)
+            ["address", "address", "uint256", "uint256", "bytes4", "uint48"],
+            [   
+                fromAddress,
+                withdrawHookContractAddress,
+                withdrawAmount, 
+                hookNonce,
+                methodID,
+                signTime
+            ]
+        );
+
+        // ** All the .slice(2) are for removing the '0x' prefix
+        // Feel free to use a better way to convert the hex data to uint8Array
+
+        const rawDataBytes = fromHexString(data.slice(2));
+
+        const hash = await ppfxContract.getWithdrawHash(fromAddress, withdrawHookContractAddress, withdrawAmount, hookNonce, methodID, signTime)
+
+        const hashBytes = fromHexString(hash.slice(2));
+
+        // Sign hashed data bytes
+        const sig = await account.signMessage(hashBytes)
+
+        // Concat the data
+        const data = new Uint8Array([
+            ...fromHexString(ppfxContractAddress.slice(2)),
+            ...rawDataBytes,
+            ...fromHexString(sig.slice(2))
+        ])
+
+
+    // execute txn on behalf of user w/ signed data
+    withdrawHook.withdrawForUser(fromAddress, withdrawAmount, data)
 ```
 
 
