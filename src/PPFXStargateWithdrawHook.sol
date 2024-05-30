@@ -59,6 +59,9 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
         stargate = IStargate(_stargate);
         _updateAdmin(_admin);
         _updateTreasury(_treasury);
+        // Or is it better to increase allowance on every "claimWithdrawalForUser",
+        // just like what we did in deposit hook ?
+        // Will it run out of allowance if we only approve in constructor once ?
         ERC20(ppfx.usdt()).approve(address(stargate), type(uint256).max);
     }
     
@@ -96,11 +99,14 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
 
         // Calculate claimed amount & deduct fee & send fee to treasury
         uint256 claimed = afterClaimBal - beforeClaimBal;
-        require(claimed > 0, "PPFXStargateWithdrawHook: No USDT to bridge");
+        
+        // Expecting `claimed` to be greater than 0,
+        // Not allow claimed == fee, that means bridging 0 usdt.
+        // This case works even given fee is 0 & non zero
+        require(claimed > fee, "PPFXStargateWithdrawHook: Insufficient claimed balance to cover the fee");
 
+        // Only transfer fee to treasury if fee is greater than 0
         if (fee > 0) {
-            // Not allow claimed == fee, that means bridging 0 usdt.
-            require(claimed > fee, "PPFXStargateWithdrawHook: Insufficient claimed balance to cover the fee");
             usdt.safeTransfer(treasury, fee);
         }
 
@@ -114,18 +120,21 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
             bytes32(bytes20(fromUser)), // Recipient address
             sendAmount, // Send amount
             minSendAmount, // Minimum send amount
-            "",
-            "",
+            "", // No extra options needed, not doing lzReceive / lzCompose etc...
+            "", // No Composed Message needed since we are transfering to user address
             ""
         );
         
         MessagingFee memory stargateFee = stargate.quoteSend(sendParam, false);
+        // Make sure the msg.value is enough to cover the stargate fee
         require(msg.value >= stargateFee.nativeFee, "PPFXStargateWithdrawHook: Insufficient msg.value to bridge token");
 
-        // This contract address is the refund address
-        stargate.sendToken{value: stargateFee.nativeFee}(sendParam, stargateFee, address(this));
+        // Refund to treasury if anything happens
+        // Not refunding to this contract address because we are not expecting this contract to be holding any funds
+        stargate.sendToken{value: stargateFee.nativeFee}(sendParam, stargateFee, treasury);
         uint256 remaining = msg.value - stargateFee.nativeFee;
         if (remaining > 0) {
+            // Refund rest of the ETH if there is remaining after payign stargate fee
             bool success = payable(msg.sender).send(remaining);
             require(success, "PPFXStargateWithdrawHook: Failed to refund fee");
         }
