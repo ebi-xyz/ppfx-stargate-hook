@@ -90,8 +90,6 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
      * Can only be called by operator
      */
     function claimWithdrawalForUser(address fromUser, bytes calldata data, uint32 dstEndpointID, uint256 slippage, uint256 fee) external payable onlyOperator {
-        require(slippage > 0, "PPFXStargateWithdrawHook: Slippage can not be zero");
-        
         // Query .usdt() everytime to prevent inconsistent usdt if PPFX update USDT address
         ERC20 usdt = ERC20(ppfx.usdt());
         uint256 beforeClaimBal = usdt.balanceOf(address(this));
@@ -108,6 +106,8 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
             usdt.safeTransfer(treasury, fee);
         }
 
+        uint256 sendAmount = claimed - fee;
+
         // Expecting slippage to be at least 6, 6bps
         uint256 minSendAmount = sendAmount * (10000 - slippage) / 10000;
     
@@ -115,7 +115,7 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
             dstEndpointID,
             bytes32(bytes20(fromUser)), // Recipient address
             sendAmount, // Send amount
-            sendAmount, // Minimum send amount
+            minSendAmount, // Minimum send amount
             "",
             "",
             ""
