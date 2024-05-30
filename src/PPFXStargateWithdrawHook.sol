@@ -53,7 +53,7 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
         IPPFX _ppfx,
         address _admin,
         address _treasury,
-        address _stargate // 0x1502FA4be69d526124D453619276FacCab275d3D
+        address _stargate
     ) {
         ppfx = _ppfx;
         stargate = IStargate(_stargate);
