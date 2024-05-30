@@ -33,8 +33,6 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
     address private pendingAdmin;
     EnumerableSet.AddressSet private operators;
 
-    mapping(uint256 => uint256) public dstChainUsdtDecimal;
-
     /**
      * @dev Throws if called by any account other than the Admin
      */
