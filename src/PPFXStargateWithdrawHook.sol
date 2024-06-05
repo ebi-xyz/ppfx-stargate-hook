@@ -71,30 +71,28 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
 
     /**
      * @dev Withdraw for User
-     * @param fromUser Target user to withdraw from
-     * @param amount Amount to withdraw
-     * @param data The data & signature signed by user to delegate this contract to withdraw for the user
+     * @param delegateData Delegate Data to withdraw from a user, including the signature
      * 
      * Can only be called by operator
      */
-    function withdrawForUser(address fromUser, uint256 amount, bytes calldata data) external onlyOperator {
-        ppfx.withdrawForUser(address(this), fromUser, amount, data);
+    function withdrawForUser(IPPFX.DelegateData calldata delegateData) external onlyOperator {
+        ppfx.withdrawForUser(address(this), delegateData.from, delegateData.amount, delegateData);
     }
     
     /**
      * @dev Claim pending withdrawal for user
-     * @param fromUser Target user to claim pending withdrawal from
-     * @param data The data & signature signed by user to delegate this contract to claim for the user
+     * @param delegateData Delegate Data to claim pending withdrawal from a user, including the signature
      * @param dstEndpointID The destination chain LayerZero endpoint id
      * @param fee Fee deduct from user withdrawal and send to treasury, can be zero
      * 
      * Can only be called by operator
      */
-    function claimWithdrawalForUser(address fromUser, bytes calldata data, uint32 dstEndpointID, uint256 slippage, uint256 fee) external payable onlyOperator {
+    function claimWithdrawalForUser(IPPFX.DelegateData calldata delegateData, uint32 dstEndpointID, uint256 slippage, uint256 fee) external payable onlyOperator {
+        address fromUser = delegateData.from;
         // Query .usdt() everytime to prevent inconsistent usdt if PPFX update USDT address
         ERC20 usdt = ERC20(ppfx.usdt());
         uint256 beforeClaimBal = usdt.balanceOf(address(this));
-        ppfx.claimPendingWithdrawalForUser(address(this), fromUser, data);
+        ppfx.claimPendingWithdrawalForUser(address(this), fromUser, delegateData);
         uint256 afterClaimBal = usdt.balanceOf(address(this));
 
         // Calculate claimed amount & deduct fee & send fee to treasury
