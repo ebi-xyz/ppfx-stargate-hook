@@ -143,6 +143,20 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
      ************************/
 
     /**
+     * @dev Sweep ERC20 Token
+     * Withdraw hook shouldn't be holding any tokens,
+     * sweepToken() in case of token stuck in the withdraw hook
+     *
+     * Requirements:
+     * - `sender` must be admin
+     */
+    function sweepToken(ERC20 token) external onlyAdmin {
+        uint256 balance = token.balanceOf(address(this));
+        require(balance > 0, "No Token to sweep");
+        token.transfer(admin, balance);
+    }
+
+    /**
      * @dev Accept admin role
      * Emits a {NewAdmin} event.
      *     
