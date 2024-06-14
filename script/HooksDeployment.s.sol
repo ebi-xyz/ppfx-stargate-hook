@@ -4,6 +4,7 @@ import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
 import {PPFXStargateDepositHook} from "../src/PPFXStargateDepositHook.sol";
 import {PPFXStargateWithdrawHook} from "../src/PPFXStargateWithdrawHook.sol";
+import {IPPFX} from "../src/IPPFX.sol";
 
 contract HooksDeploymentScript is Script {
 
@@ -42,7 +43,7 @@ contract HooksDeploymentScript is Script {
         );
 
         PPFXStargateWithdrawHook withdrawHook = new PPFXStargateWithdrawHook(
-            config.ppfx,
+            IPPFX(config.ppfx),
             config.admin,
             config.treasury,
             config.stargate
@@ -78,7 +79,10 @@ contract HooksDeploymentScript is Script {
         console.log("\n\n");
 
         console.log("Withdraw Hook Operators:");
-        console.log(withdrawHook.getAllOperators());
+        address[] memory allOperators = withdrawHook.getAllOperators();
+        for (uint i = 0; i < allOperators.length; i ++) {
+            console.logAddress(allOperators[i]);
+        }
 
         vm.stopBroadcast();   
     }

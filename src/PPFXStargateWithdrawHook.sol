@@ -64,6 +64,20 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
         // Will it run out of allowance if we only approve in constructor once ?
         ERC20(ppfx.usdt()).approve(address(stargate), type(uint256).max);
     }
+
+    /**
+     * @dev Get all operator address.
+     */
+    function getAllOperators() external view returns (address[] memory) {
+        return operators.values();
+    }
+
+    /**
+     * @dev Check if target address is operator.
+     */
+    function isOperator(address target) external view returns (bool) {
+        return operators.contains(target);
+    }
     
     /****************************
      * Operators only functions *
