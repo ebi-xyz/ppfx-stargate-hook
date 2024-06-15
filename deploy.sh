@@ -2,7 +2,7 @@
 HEX_REGEX='^[0-9a-fA-F]+$'
 
 COMMIT=$(git rev-parse HEAD)
-echo "Deploying PPFX with commit:\n    $COMMIT"
+echo "Deploying Hooks with commit:\n    $COMMIT"
 
 ACCOUNT=$1
 
