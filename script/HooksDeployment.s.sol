@@ -106,6 +106,9 @@ contract HooksDeploymentScript is Script {
             console.logAddress(allOperators[i]);
         }
 
+        console.log("\n=== Setup PPFX, Update Withdraw Hook Address ===");
+        IPPFX(config.ppfx).updateWithdrawHook(address(withdrawHook));
+
         vm.stopBroadcast();   
     }
 }
