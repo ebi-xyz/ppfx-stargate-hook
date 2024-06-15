@@ -23,8 +23,30 @@ contract HooksDeploymentScript is Script {
         string memory root = vm.projectRoot();
         string memory path = string.concat(root, "/config/hooksConfig.json");
         string memory json = vm.readFile(path);
-        bytes memory data = vm.parseJson(json);
-        config = abi.decode(data, (HooksConfig));
+        
+        address ppfx = vm.parseJsonAddress(json, ".ppfx");
+        address admin = vm.parseJsonAddress(json, ".admin");
+        address treasury = vm.parseJsonAddress(json, ".treasury");
+        address stargate = vm.parseJsonAddress(json, ".stargate");
+        address lzEndpoint = vm.parseJsonAddress(json, ".lzEndpoint");
+        address[] memory operators = vm.parseJsonAddressArray(json, ".withdrawHookOperators");
+
+        config = HooksConfig(
+            ppfx,
+            admin,
+            treasury,
+            stargate,
+            lzEndpoint,
+            operators
+        );
+
+        console.log("setUp() loaded config:");
+        console.log("PPFX: %o", config.ppfx);
+        console.log("PPFX USDT: %o", IPPFX(config.ppfx).usdt());
+        console.log("Admin: %o", config.admin);
+        console.log("Treasury: %o", config.treasury);
+        console.log("Stargate: %o", config.stargate);
+        console.log("LzEndpoint: %o", config.lzEndpoint);
     }
 
     function run() public {
@@ -41,7 +63,7 @@ contract HooksDeploymentScript is Script {
             config.lzEndpoint,
             config.stargate
         );
-
+        
         PPFXStargateWithdrawHook withdrawHook = new PPFXStargateWithdrawHook(
             IPPFX(config.ppfx),
             config.admin,
