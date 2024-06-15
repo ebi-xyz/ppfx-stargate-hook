@@ -25,6 +25,10 @@ TREASURY=$(echo "$CONFIG" | jq -r '.treasury')
 STARGATE=$(echo "$CONFIG" | jq -r '.stargate')
 LZ_ENDPOINT=$(echo "$CONFIG" | jq -r '.lzEndpoint')
 
+echo "Deploy configs: "
+echo "    Testnet=$TESTNET"
+echo "    RPC=$RPC"
+
 echo "Hooks configs: "
 echo "    PPFX=$PPFX"
 echo "    ADMIN=$ADMIN"
