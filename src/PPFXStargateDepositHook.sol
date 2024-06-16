@@ -45,14 +45,13 @@ contract PPFXStargateDepositHook is IOAppComposer, ReentrancyGuard {
     ) external payable override {
         require(msg.sender == lzEndpoint, "PPFXStargateDepositHook: Not LayerZero Endpoint");
         require(_oApp == stargate, "PPFXStargateDepositHook: Not Stargate Contract");
-
-        // Extract the composed message from the delivered message using the MsgCodec
-        bytes memory _composeMsgContent = OFTComposeMsgCodec.composeMsg(_message);
-        // Decode the composed message, in this case, the uint256 amount and address receiver for the deposit
-        (uint256 _amountToDeposit, address _receiver) = abi.decode(_composeMsgContent, (uint256, address));
+        // Get the authenticated amount from stargate message
+        uint256 amountLD = OFTComposeMsgCodec.amountLD(_message);
+        // Get the authenticated sender from stargate message, expecting the sender to be the receiver in PPFX
+        address sender = OFTComposeMsgCodec.bytes32ToAddress(OFTComposeMsgCodec.composeFrom(_message));
         // Increase usdt allowance to PPFX before depositing
-        IERC20(ppfx.usdt()).safeIncreaseAllowance(address(ppfx), _amountToDeposit);
+        IERC20(ppfx.usdt()).safeIncreaseAllowance(address(ppfx), amountLD);
 
-        ppfx.depositForUser(_receiver, _amountToDeposit);
+        ppfx.depositForUser(sender, amountLD);
     }
 }
