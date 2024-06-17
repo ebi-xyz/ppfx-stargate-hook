@@ -61,7 +61,8 @@ contract HooksDeploymentScript is Script {
         PPFXStargateDepositHook depositHook = new PPFXStargateDepositHook(
             config.ppfx,
             config.lzEndpoint,
-            config.stargate
+            config.stargate,
+            config.admin
         );
         
         PPFXStargateWithdrawHook withdrawHook = new PPFXStargateWithdrawHook(

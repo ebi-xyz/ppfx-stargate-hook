@@ -8,9 +8,9 @@ import {IPPFX} from "./IPPFX.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import { OFTComposeMsgCodec } from "@layerzerolabs/lz-evm-oapp-v2/contracts/oft/libs/OFTComposeMsgCodec.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
-
-contract PPFXStargateDepositHook is IOAppComposer, ReentrancyGuard {
+contract PPFXStargateDepositHook is Ownable, IOAppComposer, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     IPPFX public immutable ppfx;
@@ -22,10 +22,17 @@ contract PPFXStargateDepositHook is IOAppComposer, ReentrancyGuard {
     /// @param _ppfx The address of the PPFX Contract
     /// @param _lzEndpoint LayerZero Endpoint address
     /// @param _stargate The address of the Stargate contract
-    constructor(address _ppfx, address _lzEndpoint, address _stargate) {
+    /// @param _admin Admin address
+    constructor(
+        address _ppfx,
+        address _lzEndpoint,
+        address _stargate,
+        address _admin
+    ) {
         ppfx = IPPFX(_ppfx);
         lzEndpoint = _lzEndpoint;
         stargate = _stargate;
+        _transferOwnership(_admin);
     }
 
     /// @notice Handles incoming composed messages from LayerZero.
@@ -53,5 +60,23 @@ contract PPFXStargateDepositHook is IOAppComposer, ReentrancyGuard {
         IERC20(ppfx.usdt()).safeIncreaseAllowance(address(ppfx), amountLD);
 
         ppfx.depositForUser(sender, amountLD);
+    }
+
+    /************************
+     * Owner only functions *
+     ************************/
+
+    /**
+     * @dev Sweep ERC20 Token
+     * Deposit hook shouldn't be holding any tokens,
+     * sweepToken() in case of token stuck in the deposit hook
+     *
+     * Requirements:
+     * - `sender` must be the owner
+     */
+    function sweepToken(IERC20 token) external onlyOwner {
+        uint256 balance = token.balanceOf(address(this));
+        require(balance > 0, "No Token to sweep");
+        token.safeTransfer(owner(), balance);
     }
 }
