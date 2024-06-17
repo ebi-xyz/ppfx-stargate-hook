@@ -129,7 +129,7 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
     
         SendParam memory sendParam = SendParam(
             dstEndpointID,
-            bytes32(bytes20(fromUser)), // Recipient address
+            bytes32(uint256(uint160(fromUser))), // Recipient address
             sendAmount, // Send amount
             minSendAmount, // Minimum send amount
             "", // No extra options needed, not doing lzReceive / lzCompose etc...
