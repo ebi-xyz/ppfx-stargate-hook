@@ -138,7 +138,7 @@ contract PPFXStargateWithdrawHook is Ownable2Step, ReentrancyGuard {
         uint256 remaining = msg.value - stargateFee.nativeFee;
         if (remaining > 0) {
             // Refund rest of the ETH if there is remaining after paying stargate fee
-            bool success = msg.sender.call{ value: remaining}("");
+            (bool success, ) = msg.sender.call{ value: remaining}("");
             require(success, "PPFXStargateWithdrawHook: Failed to refund fee");
         }
     }
