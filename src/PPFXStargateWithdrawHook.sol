@@ -146,8 +146,8 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
         stargate.sendToken{value: stargateFee.nativeFee}(sendParam, stargateFee, treasury);
         uint256 remaining = msg.value - stargateFee.nativeFee;
         if (remaining > 0) {
-            // Refund rest of the ETH if there is remaining after payign stargate fee
-            bool success = payable(msg.sender).send(remaining);
+            // Refund rest of the ETH if there is remaining after paying stargate fee
+            bool success = msg.sender.call{ value: remaining}("");
             require(success, "PPFXStargateWithdrawHook: Failed to refund fee");
         }
     }
