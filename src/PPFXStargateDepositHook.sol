@@ -5,12 +5,10 @@ import {IOAppComposer} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/interf
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IPPFX} from "./IPPFX.sol";
-import {Context} from "@openzeppelin/contracts/utils/Context.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import { OFTComposeMsgCodec } from "@layerzerolabs/lz-evm-oapp-v2/contracts/oft/libs/OFTComposeMsgCodec.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract PPFXStargateDepositHook is Ownable, IOAppComposer, ReentrancyGuard {
+contract PPFXStargateDepositHook is Ownable, IOAppComposer {
     using SafeERC20 for IERC20;
 
     IPPFX public immutable ppfx;
