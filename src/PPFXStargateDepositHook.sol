@@ -52,6 +52,7 @@ contract PPFXStargateDepositHook is Ownable, IOAppComposer, ReentrancyGuard {
     ) external payable override {
         require(msg.sender == lzEndpoint, "PPFXStargateDepositHook: Not LayerZero Endpoint");
         require(_oApp == stargate, "PPFXStargateDepositHook: Not Stargate Contract");
+        require(msg.value == 0, "PPFXStargateDepositHook: msg.value must be zero to prevent native token stuck");
         // Get the authenticated amount from stargate message
         uint256 amountLD = OFTComposeMsgCodec.amountLD(_message);
         // Get the authenticated sender from stargate message, expecting the sender to be the receiver in PPFX
