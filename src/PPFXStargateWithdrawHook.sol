@@ -4,15 +4,15 @@ pragma solidity ^0.8.20;
 import {IPPFX} from "./IPPFX.sol";
 import {IStargate, Ticket} from "./IStargate.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {SendParam, MessagingReceipt, OFTReceipt} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oft/interfaces/IOFT.sol";
 import {MessagingFee} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oft/OFTCore.sol";
 import {OptionsBuilder} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/OptionsBuilder.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 
-contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
+contract PPFXStargateWithdrawHook is Ownable2Step, ReentrancyGuard {
     using OptionsBuilder for bytes;
     using EnumerableSet for EnumerableSet.AddressSet;
     using SafeERC20 for ERC20;
@@ -34,14 +34,6 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
     EnumerableSet.AddressSet private operators;
 
     /**
-     * @dev Throws if called by any account other than the Admin
-     */
-    modifier onlyAdmin {
-        require(_msgSender() == admin, "Caller not admin");
-        _;
-    }
-
-    /**
      * @dev Throws if called by any account other than the Operator
      */
     modifier onlyOperator {
@@ -57,7 +49,7 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
     ) {
         ppfx = _ppfx;
         stargate = IStargate(_stargate);
-        _updateAdmin(_admin);
+        _transferOwnership(_admin);
         _updateTreasury(_treasury);
         // Or is it better to increase allowance on every "claimWithdrawalForUser",
         // just like what we did in deposit hook ?
@@ -152,9 +144,9 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
         }
     }
 
-    /************************
-     * Admin only functions *
-     ************************/
+    /*******************************
+     * Owner(Admin) only functions *
+     *******************************/
 
     /**
      * @dev Sweep ERC20 Token
@@ -162,37 +154,12 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
      * sweepToken() in case of token stuck in the withdraw hook
      *
      * Requirements:
-     * - `sender` must be admin
+     * - `sender` must be owner (admin)
      */
-    function sweepToken(ERC20 token) external onlyAdmin {
+    function sweepToken(ERC20 token) external onlyOwner {
         uint256 balance = token.balanceOf(address(this));
         require(balance > 0, "No Token to sweep");
         token.transfer(admin, balance);
-    }
-
-    /**
-     * @dev Accept admin role
-     * Emits a {NewAdmin} event.
-     *     
-     */
-     function acceptAdmin() external {
-        require(pendingAdmin != address(0), "Admin address can not be zero");
-        require(_msgSender() == pendingAdmin, "Caller not pendingAdmin");
-        _updateAdmin(pendingAdmin);
-        pendingAdmin = address(0);
-     }
-
-    /**
-     * @dev Update Admin account.
-     * @param adminAddr The new admin address.     
-     * Emits a {TransferAdmin} event.
-     * 
-     * Requirements:
-     * - `adminAddr` cannot be the zero address.
-     */
-    function transferAdmin(address adminAddr) external onlyAdmin() {
-        require(adminAddr != address(0), "Admin address can not be zero");
-        _transferAdmin(adminAddr);
     }
 
     /**
@@ -204,7 +171,7 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
      * Requirements:
      * - `treasuryAddr` cannot be the zero address.
      */
-    function updateTreasury(address treasuryAddr) external onlyAdmin {
+    function updateTreasury(address treasuryAddr) external onlyOwner {
         require(treasuryAddr != address(0), "Treasury address can not be zero");
         _updateTreasury(treasuryAddr);
     }
@@ -219,7 +186,7 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
      * - `operatorAddr` cannot be the zero address.
      * - `operatorAddr` must not exists in the operators array.
      */
-    function addOperator(address operatorAddr) external onlyAdmin {
+    function addOperator(address operatorAddr) external onlyOwner {
         require(operatorAddr != address(0), "Operator address can not be zero");
         require(!operators.contains(operatorAddr), "Operator already exists");
         require(operators.length() <= MAX_OPERATORS, "Too many operators");
@@ -236,7 +203,7 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
      * - `operatorAddr` cannot be the zero address.
      * - `operatorAddr` must exists in the operators array.
      */
-    function removeOperator(address operatorAddr) external onlyAdmin {
+    function removeOperator(address operatorAddr) external onlyOwner {
         require(operatorAddr != address(0), "Operator address can not be zero");
         require(operators.contains(operatorAddr), "Operator does not exists");
         _removeOperator(operatorAddr);
@@ -248,7 +215,7 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
      * Emits {OperatorRemoved} event for every deleted operator.
      *
      */
-    function removeAllOperator() external onlyAdmin {
+    function removeAllOperator() external onlyOwner {
         require(operators.length() > 0, "No operator found");
         _removeAllOperator();
     }
@@ -275,16 +242,6 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
     function _addOperator(address operatorAddr) internal {
         operators.add(operatorAddr);
         emit NewOperator(operatorAddr);
-    }
-
-    function _transferAdmin(address adminAddr) internal {
-        pendingAdmin = adminAddr;
-        emit TransferAdmin(adminAddr);
-    }
-
-    function _updateAdmin(address adminAddr) internal {
-        admin = adminAddr;
-        emit NewAdmin(adminAddr);
     }
 
     function _updateTreasury(address treasuryAddr) internal {
