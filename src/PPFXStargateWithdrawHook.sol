@@ -51,10 +51,6 @@ contract PPFXStargateWithdrawHook is Ownable2Step, ReentrancyGuard {
         stargate = IStargate(_stargate);
         _transferOwnership(_admin);
         _updateTreasury(_treasury);
-        // Or is it better to increase allowance on every "claimWithdrawalForUser",
-        // just like what we did in deposit hook ?
-        // Will it run out of allowance if we only approve in constructor once ?
-        ERC20(ppfx.usdt()).approve(address(stargate), type(uint256).max);
     }
 
     /**
@@ -133,6 +129,9 @@ contract PPFXStargateWithdrawHook is Ownable2Step, ReentrancyGuard {
         // Make sure the msg.value is enough to cover the stargate fee
         require(msg.value >= stargateFee.nativeFee, "PPFXStargateWithdrawHook: Insufficient msg.value to bridge token");
 
+        // Increase allowance before calling startgate.sendToken()
+        usdt.safeIncreaseAllowance(address(stargate), sendAmount);
+        
         // Refund to treasury if anything happens
         // Not refunding to this contract address because we are not expecting this contract to be holding any funds
         stargate.sendToken{value: stargateFee.nativeFee}(sendParam, stargateFee, treasury);
