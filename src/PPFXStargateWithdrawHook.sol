@@ -20,8 +20,6 @@ contract PPFXStargateWithdrawHook is Ownable2Step, ReentrancyGuard {
     event NewOperator(address indexed newOperatorAddress);
     event OperatorRemoved(address indexed operatorAddr);
     event NewTreasury(address indexed newTreasuryAddress);
-    event NewAdmin(address indexed newAdminAddress);
-    event TransferAdmin(address indexed newAdminAddress);
 
     uint256 constant public MAX_OPERATORS = 10;
 
@@ -29,8 +27,6 @@ contract PPFXStargateWithdrawHook is Ownable2Step, ReentrancyGuard {
     IPPFX public immutable ppfx;
 
     address public treasury;
-    address public admin;
-    address private pendingAdmin;
     EnumerableSet.AddressSet private operators;
 
     /**
@@ -138,7 +134,7 @@ contract PPFXStargateWithdrawHook is Ownable2Step, ReentrancyGuard {
         uint256 remaining = msg.value - stargateFee.nativeFee;
         if (remaining > 0) {
             // Refund rest of the ETH if there is remaining after paying stargate fee
-            bool success = msg.sender.call{ value: remaining}("");
+            (bool success, ) = msg.sender.call{ value: remaining}("");
             require(success, "PPFXStargateWithdrawHook: Failed to refund fee");
         }
     }
@@ -158,7 +154,7 @@ contract PPFXStargateWithdrawHook is Ownable2Step, ReentrancyGuard {
     function sweepToken(ERC20 token) external onlyOwner {
         uint256 balance = token.balanceOf(address(this));
         require(balance > 0, "No Token to sweep");
-        token.transfer(admin, balance);
+        token.transfer(owner(), balance);
     }
 
     /**
