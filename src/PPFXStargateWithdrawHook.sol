@@ -154,7 +154,7 @@ contract PPFXStargateWithdrawHook is Ownable2Step, ReentrancyGuard {
     function sweepToken(ERC20 token) external onlyOwner {
         uint256 balance = token.balanceOf(address(this));
         require(balance > 0, "No Token to sweep");
-        token.transfer(owner(), balance);
+        token.safeTransfer(owner(), balance);
     }
 
     /**
