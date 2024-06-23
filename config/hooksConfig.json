@@ -1,0 +1,10 @@
+{
+    "ppfx": "0xA60e2bf9A6D7B8e9d0f928308A77353dFE1c71Ca",
+    "admin": "0x7C44e3ab48a8b7b5779BE7fFB06Fec0eB6a41faE",
+    "treasury": "0x91EdEa34a45755F8e4A6341A9c19242cE0e72daF",
+    "stargate": "0xF8c61c8F4Fdd41dd444f7b582C9F440e1b1ADcc8",
+    "lzEndpoint": "0x6F475642a6e85809B1c36Fa62763669b1b48DD5B",
+    "withdrawHookOperators": [
+        "0xF85F982dBBe82E4ecB998D0768fFD2197898f32f"
+    ]
+}

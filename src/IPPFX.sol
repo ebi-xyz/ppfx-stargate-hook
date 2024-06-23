@@ -50,4 +50,14 @@ interface IPPFX {
     */
     function claimPendingWithdrawalForUser(address delegate, address user, DelegateData calldata delegateData) external;
 
+    /**
+     * @dev Update Withdraw Hook Address.
+     * @param newWithdrawHook The new withdraw hook address.
+     *
+     * Emits a {NewWithdrawHook} event.
+     *
+     * Requirements:
+     * - `newWithdrawHook` cannot be zero address.
+     */
+    function updateWithdrawHook(address newWithdrawHook) external;
 }

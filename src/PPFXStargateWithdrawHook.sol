@@ -4,15 +4,15 @@ pragma solidity ^0.8.20;
 import {IPPFX} from "./IPPFX.sol";
 import {IStargate, Ticket} from "./IStargate.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {SendParam, MessagingReceipt, OFTReceipt} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oft/interfaces/IOFT.sol";
 import {MessagingFee} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oft/OFTCore.sol";
 import {OptionsBuilder} from "@layerzerolabs/lz-evm-oapp-v2/contracts/oapp/libs/OptionsBuilder.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 
-contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
+contract PPFXStargateWithdrawHook is Ownable2Step, ReentrancyGuard {
     using OptionsBuilder for bytes;
     using EnumerableSet for EnumerableSet.AddressSet;
     using SafeERC20 for ERC20;
@@ -20,8 +20,6 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
     event NewOperator(address indexed newOperatorAddress);
     event OperatorRemoved(address indexed operatorAddr);
     event NewTreasury(address indexed newTreasuryAddress);
-    event NewAdmin(address indexed newAdminAddress);
-    event TransferAdmin(address indexed newAdminAddress);
 
     uint256 constant public MAX_OPERATORS = 10;
 
@@ -29,17 +27,7 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
     IPPFX public immutable ppfx;
 
     address public treasury;
-    address public admin;
-    address private pendingAdmin;
     EnumerableSet.AddressSet private operators;
-
-    /**
-     * @dev Throws if called by any account other than the Admin
-     */
-    modifier onlyAdmin {
-        require(_msgSender() == admin, "Caller not admin");
-        _;
-    }
 
     /**
      * @dev Throws if called by any account other than the Operator
@@ -57,12 +45,22 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
     ) {
         ppfx = _ppfx;
         stargate = IStargate(_stargate);
-        _updateAdmin(_admin);
+        _transferOwnership(_admin);
         _updateTreasury(_treasury);
-        // Or is it better to increase allowance on every "claimWithdrawalForUser",
-        // just like what we did in deposit hook ?
-        // Will it run out of allowance if we only approve in constructor once ?
-        ERC20(ppfx.usdt()).approve(address(stargate), type(uint256).max);
+    }
+
+    /**
+     * @dev Get all operator address.
+     */
+    function getAllOperators() external view returns (address[] memory) {
+        return operators.values();
+    }
+
+    /**
+     * @dev Check if target address is operator.
+     */
+    function isOperator(address target) external view returns (bool) {
+        return operators.contains(target);
     }
     
     /****************************
@@ -115,7 +113,7 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
     
         SendParam memory sendParam = SendParam(
             dstEndpointID,
-            bytes32(bytes20(fromUser)), // Recipient address
+            bytes32(uint256(uint160(fromUser))), // Recipient address
             sendAmount, // Send amount
             minSendAmount, // Minimum send amount
             "", // No extra options needed, not doing lzReceive / lzCompose etc...
@@ -127,44 +125,36 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
         // Make sure the msg.value is enough to cover the stargate fee
         require(msg.value >= stargateFee.nativeFee, "PPFXStargateWithdrawHook: Insufficient msg.value to bridge token");
 
+        // Increase allowance before calling startgate.sendToken()
+        usdt.safeIncreaseAllowance(address(stargate), sendAmount);
+        
         // Refund to treasury if anything happens
         // Not refunding to this contract address because we are not expecting this contract to be holding any funds
         stargate.sendToken{value: stargateFee.nativeFee}(sendParam, stargateFee, treasury);
         uint256 remaining = msg.value - stargateFee.nativeFee;
         if (remaining > 0) {
-            // Refund rest of the ETH if there is remaining after payign stargate fee
-            bool success = payable(msg.sender).send(remaining);
+            // Refund rest of the ETH if there is remaining after paying stargate fee
+            (bool success, ) = msg.sender.call{ value: remaining}("");
             require(success, "PPFXStargateWithdrawHook: Failed to refund fee");
         }
     }
 
-    /************************
-     * Admin only functions *
-     ************************/
+    /*******************************
+     * Owner(Admin) only functions *
+     *******************************/
 
     /**
-     * @dev Accept admin role
-     * Emits a {NewAdmin} event.
-     *     
-     */
-     function acceptAdmin() external {
-        require(pendingAdmin != address(0), "Admin address can not be zero");
-        require(_msgSender() == pendingAdmin, "Caller not pendingAdmin");
-        _updateAdmin(pendingAdmin);
-        pendingAdmin = address(0);
-     }
-
-    /**
-     * @dev Update Admin account.
-     * @param adminAddr The new admin address.     
-     * Emits a {TransferAdmin} event.
-     * 
+     * @dev Sweep ERC20 Token
+     * Withdraw hook shouldn't be holding any tokens,
+     * sweepToken() in case of token stuck in the withdraw hook
+     *
      * Requirements:
-     * - `adminAddr` cannot be the zero address.
+     * - `sender` must be owner (admin)
      */
-    function transferAdmin(address adminAddr) external onlyAdmin() {
-        require(adminAddr != address(0), "Admin address can not be zero");
-        _transferAdmin(adminAddr);
+    function sweepToken(ERC20 token) external onlyOwner {
+        uint256 balance = token.balanceOf(address(this));
+        require(balance > 0, "No Token to sweep");
+        token.safeTransfer(owner(), balance);
     }
 
     /**
@@ -176,7 +166,7 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
      * Requirements:
      * - `treasuryAddr` cannot be the zero address.
      */
-    function updateTreasury(address treasuryAddr) external onlyAdmin {
+    function updateTreasury(address treasuryAddr) external onlyOwner {
         require(treasuryAddr != address(0), "Treasury address can not be zero");
         _updateTreasury(treasuryAddr);
     }
@@ -191,7 +181,7 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
      * - `operatorAddr` cannot be the zero address.
      * - `operatorAddr` must not exists in the operators array.
      */
-    function addOperator(address operatorAddr) external onlyAdmin {
+    function addOperator(address operatorAddr) external onlyOwner {
         require(operatorAddr != address(0), "Operator address can not be zero");
         require(!operators.contains(operatorAddr), "Operator already exists");
         require(operators.length() <= MAX_OPERATORS, "Too many operators");
@@ -208,7 +198,7 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
      * - `operatorAddr` cannot be the zero address.
      * - `operatorAddr` must exists in the operators array.
      */
-    function removeOperator(address operatorAddr) external onlyAdmin {
+    function removeOperator(address operatorAddr) external onlyOwner {
         require(operatorAddr != address(0), "Operator address can not be zero");
         require(operators.contains(operatorAddr), "Operator does not exists");
         _removeOperator(operatorAddr);
@@ -220,7 +210,7 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
      * Emits {OperatorRemoved} event for every deleted operator.
      *
      */
-    function removeAllOperator() external onlyAdmin {
+    function removeAllOperator() external onlyOwner {
         require(operators.length() > 0, "No operator found");
         _removeAllOperator();
     }
@@ -247,16 +237,6 @@ contract PPFXStargateWithdrawHook is Context, ReentrancyGuard {
     function _addOperator(address operatorAddr) internal {
         operators.add(operatorAddr);
         emit NewOperator(operatorAddr);
-    }
-
-    function _transferAdmin(address adminAddr) internal {
-        pendingAdmin = adminAddr;
-        emit TransferAdmin(adminAddr);
-    }
-
-    function _updateAdmin(address adminAddr) internal {
-        admin = adminAddr;
-        emit NewAdmin(adminAddr);
     }
 
     function _updateTreasury(address treasuryAddr) internal {
